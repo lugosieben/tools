@@ -13,6 +13,20 @@
 			src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
 			integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
 			crossorigin="anonymous"></script>
+		<style>
+			#honey-amount::-webkit-inner-spin-button,
+			#honey-amount::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+			#honey-amount {
+				-moz-appearance: textfield;
+				appearance: textfield;
+			}
+			#honey-unit {
+				min-width: 70px;
+			}
+		</style>
 	</head>
 	<body class="bg-dark text-light">
 		<div class="container pt-5">
@@ -41,11 +55,27 @@
 				Leveling up your bees would require <br />
 				<b id="bondresult">0</b> Bond, <br />
 				<b id="treatresult">0</b> Treats or <br />
-				<b id="costresult">0 (0)</b> Honey.
+				<b id="costresult">0 (0.00)</b> Honey.
 			</p>
 			<p class="note text-secondary">
 				What can give BFT: Puppy Bee (20%), Moon Amulet (0-10%), Reindeer Antlers (0-1%)
 			</p>
+
+			<hr class="my-4" />
+			<div class="row p-1">
+				<label class="col-md-auto">Averaging</label>
+				<input class="col-md-2" type="number" id="honey-amount" value="1" />
+				<select class="col-md-1" id="honey-unit" onchange="updateInputWidth()">
+					<option value="1">Honey</option>
+					<option value="1000">K</option>
+					<option value="1000000">M</option>
+					<option value="1000000000">B</option>
+					<option value="1000000000000">T</option>
+				</select>
+				<label class="col-md-auto">per hour</label>
+			</div>
+			<button class="btn btn-light mt-2" onclick="calc(); calcTime()">Calculate Time</button>
+			<p class="pt-2">This will take <b id="timeresult">0.0</b> hours.</p>
 		</div>
 		<script>
 			const bondRequirements = {
@@ -109,6 +139,29 @@
 
 				return honey.toFixed(2) + units[unitIndex];
 			}
+
+			function calcTime() {
+				const honeyPerUnit = parseFloat(document.getElementById("honey-amount").value);
+				const unitMultiplier = parseFloat(document.getElementById("honey-unit").value);
+				const honeyPerHour = honeyPerUnit * unitMultiplier;
+
+				const costText = document.getElementById("costresult").textContent;
+				const honeyCost = parseInt(costText.split(" ")[0].replace(/,/g, ""));
+
+				const hours = honeyCost / honeyPerHour;
+				const timeResult = document.getElementById("timeresult");
+				timeResult.textContent = hours.toFixed(1) + (hours > 24 ? ` (${(hours / 24).toFixed(1)} days)` : "");
+			}
+
+			function updateInputWidth() {
+				const unit = document.getElementById("honey-unit").value;
+				const input = document.getElementById("honey-unit");
+
+				input.classList.remove("col-md-1", "col-md-2");
+				input.classList.add(unit === "1" ? "col-md-2" : "col-md-1");
+			}
+
+			document.addEventListener("DOMContentLoaded", updateInputWidth);
 		</script>
 	</body>
 </html>
