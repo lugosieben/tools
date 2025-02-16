@@ -152,16 +152,6 @@
 				const timeResult = document.getElementById("timeresult");
 				timeResult.textContent = hours.toFixed(1) + (hours > 24 ? ` (${(hours / 24).toFixed(1)} days)` : "");
 			}
-
-			function updateInputWidth() {
-				const unit = document.getElementById("honey-unit").value;
-				const input = document.getElementById("honey-unit");
-
-				input.classList.remove("col-md-1", "col-md-2");
-				input.classList.add(unit === "1" ? "col-md-2" : "col-md-1");
-			}
-
-			document.addEventListener("DOMContentLoaded", updateInputWidth);
 		</script>
 	</body>
 </html>
