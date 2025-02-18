@@ -106,6 +106,8 @@
 				25: 95000000000000000,
 			};
 
+			let honeyCost = 0;
+
 			function calc() {
 				const currentLevel = parseInt(document.getElementById("current-beelevel").value);
 				const targetLevel = parseInt(document.getElementById("target-beelevel").value);
@@ -121,7 +123,7 @@
 
 				totalBond *= beeAmount;
 				const treatsNeeded = Math.ceil(totalBond / (10 * (1 + bft)));
-				const honeyCost = treatsNeeded * 10000;
+				honeyCost = treatsNeeded * 10000;
 
 				document.getElementById("bondresult").textContent = totalBond.toLocaleString();
 				document.getElementById("treatresult").textContent = treatsNeeded.toLocaleString();
@@ -146,7 +148,6 @@
 				const honeyPerHour = honeyPerUnit * unitMultiplier;
 
 				const costText = document.getElementById("costresult").textContent;
-				const honeyCost = parseInt(costText.split(" ")[0].replace(/,/g, ""));
 
 				const hours = honeyCost / honeyPerHour;
 				const timeResult = document.getElementById("timeresult");
