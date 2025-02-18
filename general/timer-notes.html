@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Timer Notes</title>
+		<link
+			href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+			rel="stylesheet"
+			integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+			crossorigin="anonymous" />
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+		<script
+			src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+			integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+			crossorigin="anonymous"></script>
+		<style>
+			.note-item {
+				cursor: default;
+			}
+			.drag-handle {
+				cursor: grab;
+			}
+			.dragging {
+				opacity: 0.5;
+			}
+		</style>
+	</head>
+	<body class="bg-dark text-light">
+		<div class="container pt-5">
+			<div class="d-flex justify-content-between align-items-center">
+				<h1>Timer Notes</h1>
+				<div>
+					<button class="btn btn-outline-light btn-sm me-2" onclick="exportNotes()">
+						<i class="bi bi-download me-1"></i>Export
+					</button>
+					<button class="btn btn-outline-light btn-sm" onclick="showImport()">
+						<i class="bi bi-upload me-1"></i>Import
+					</button>
+				</div>
+			</div>
+			<br />
+			<div class="row p-1">
+				<div class="col-md-7">
+					<input type="text" class="form-control" id="noteInput" placeholder="Enter your note" />
+				</div>
+				<div class="col-md-3">
+					<input type="text" class="form-control" id="timerInput" placeholder="Timer (e.g. 30m or 1h 30m)" />
+				</div>
+				<div class="col-md-2">
+					<button class="btn btn-light w-100" onclick="addNote()">Add Note</button>
+				</div>
+			</div>
+			<div id="notesList" class="mt-4">
+				<!-- Notes will be added here -->
+			</div>
+		</div>
+
+		<div class="modal fade" id="editModal" tabindex="-1">
+			<div class="modal-dialog">
+				<div class="modal-content bg-dark">
+					<div class="modal-header">
+						<h5 class="modal-title" id="editModalTitle">Edit Note</h5>
+						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+					</div>
+					<div class="modal-body">
+						<input type="hidden" id="editIndex" />
+						<div class="mb-3">
+							<label for="editText" class="form-label">Note Text</label>
+							<input type="text" class="form-control" id="editText" />
+						</div>
+						<div class="mb-3">
+							<label for="editTimer" class="form-label">Timer (e.g. 30m or 1h 30m)</label>
+							<input type="text" class="form-control" id="editTimer" />
+						</div>
+						<div class="mb-3">
+							<label for="editColor" class="form-label">Color Scheme</label>
+							<select class="form-select" id="editColor">
+								<option value="secondary">Default (Gray)</option>
+								<option value="primary">Primary (Blue)</option>
+								<option value="success">Success (Green)</option>
+								<option value="danger">Danger (Red)</option>
+								<option value="warning">Warning (Yellow)</option>
+								<option value="info">Info (Cyan)</option>
+							</select>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="button" class="btn btn-primary" onclick="saveEdit()">Save</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="modal fade" id="importModal" tabindex="-1">
+			<div class="modal-dialog">
+				<div class="modal-content bg-dark">
+					<div class="modal-header">
+						<h5 class="modal-title">Import Notes</h5>
+						<button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+					</div>
+					<div class="modal-body">
+						<div class="mb-3">
+							<label for="importData" class="form-label">Paste exported notes data</label>
+							<textarea class="form-control" id="importData" rows="5"></textarea>
+						</div>
+					</div>
+					<div class="modal-footer">
+						<button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+						<button type="button" class="btn btn-primary" onclick="importNotes()">Import</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			let notes = [];
+			let lastSwap = null;
+			let timerIntervals = {};
+			let editModal;
+			let importModal;
+
+			document.addEventListener("DOMContentLoaded", function () {
+				editModal = new bootstrap.Modal(document.getElementById("editModal"));
+				importModal = new bootstrap.Modal(document.getElementById("importModal"));
+				loadFromStorage();
+			});
+
+			function saveToStorage() {
+				const data = notes.map((note) => ({
+					...note,
+					remainingTime: note.paused ? note.pauseOffset : note.endTime ? Math.max(0, note.endTime - Date.now()) : 0,
+				}));
+				localStorage.setItem("timerNotes", JSON.stringify(data));
+			}
+
+			function loadFromStorage() {
+				const stored = localStorage.getItem("timerNotes");
+				if (stored) {
+					const data = JSON.parse(stored);
+					notes = data.map((note) => ({
+						...note,
+						endTime: note.remainingTime ? Date.now() + note.remainingTime : 0,
+					}));
+					renderNotes();
+				}
+			}
+
+			function exportNotes() {
+				const data = notes.map((note) => ({
+					text: note.text,
+					originalDuration: note.originalDuration,
+					remainingTime: note.paused ? note.pauseOffset : note.endTime ? Math.max(0, note.endTime - Date.now()) : 0,
+					paused: note.paused,
+				}));
+				const exportStr = btoa(JSON.stringify(data));
+				navigator.clipboard.writeText(exportStr).then(() => {
+					alert("Notes data copied to clipboard!");
+				});
+			}
+
+			function showImport() {
+				document.getElementById("importData").value = "";
+				importModal.show();
+			}
+
+			function importNotes() {
+				try {
+					const importStr = document.getElementById("importData").value;
+					const data = JSON.parse(atob(importStr));
+					notes = data.map((note) => ({
+						text: note.text,
+						originalDuration: note.originalDuration,
+						endTime: note.remainingTime ? Date.now() + note.remainingTime : 0,
+						paused: note.paused,
+						pauseOffset: note.paused ? note.remainingTime : 0,
+					}));
+					importModal.hide();
+					renderNotes();
+					saveToStorage();
+				} catch (e) {
+					alert("Invalid import data!");
+				}
+			}
+
+			function parseTimer(timerStr) {
+				if (!timerStr) return 0;
+
+				if (/^\d+$/.test(timerStr)) {
+					return parseInt(timerStr) * 60 * 1000;
+				}
+
+				let total = 0;
+				const hours = timerStr.match(/(\d+)\s*h/);
+				const minutes = timerStr.match(/(\d+)\s*m/);
+				const seconds = timerStr.match(/(\d+)\s*s/);
+
+				if (hours) total += parseInt(hours[1]) * 3600000;
+				if (minutes) total += parseInt(minutes[1]) * 60000;
+				if (seconds) total += parseInt(seconds[1]) * 1000;
+
+				return total;
+			}
+
+			function formatTimeRemaining(endTime, paused, pauseOffset) {
+				const remaining = paused ? pauseOffset : endTime - Date.now();
+				if (remaining <= 0) return "Expired";
+
+				const hours = Math.floor(remaining / 3600000);
+				const minutes = Math.floor((remaining % 3600000) / 60000);
+				const seconds = Math.floor((remaining % 60000) / 1000);
+
+				let result = [];
+				if (hours > 0) result.push(`${hours}h`);
+				if (minutes > 0) result.push(`${minutes}m`);
+				if (seconds > 0) result.push(`${seconds}s`);
+				return result.join(" ") + (paused ? " (Paused)" : "");
+			}
+
+			function addNote() {
+				const input = document.getElementById("noteInput");
+				const timerInput = document.getElementById("timerInput");
+				if (input.value.trim() === "") return;
+
+				const duration = parseTimer(timerInput.value.trim());
+				const endTime = Date.now() + duration;
+
+				notes.push({
+					text: input.value,
+					endTime: duration ? endTime : 0,
+					paused: false,
+					pauseOffset: 0,
+					originalDuration: duration,
+					colorScheme: "secondary",
+				});
+
+				input.value = "";
+				timerInput.value = "";
+				renderNotes();
+				saveToStorage();
+			}
+
+			function deleteNote(index) {
+				notes.splice(index, 1);
+				renderNotes();
+				saveToStorage();
+			}
+
+			function togglePause(index) {
+				const note = notes[index];
+				if (!note.endTime) return;
+
+				if (note.paused) {
+					// Resume
+					note.endTime = Date.now() + note.pauseOffset;
+					note.paused = false;
+				} else {
+					// Pause
+					note.pauseOffset = note.endTime - Date.now();
+					note.paused = true;
+				}
+				renderNotes();
+				saveToStorage();
+			}
+
+			function restartTimer(index) {
+				const note = notes[index];
+				if (!note.originalDuration) return;
+
+				note.endTime = Date.now() + note.originalDuration;
+				note.paused = false;
+				note.pauseOffset = 0;
+				renderNotes();
+				saveToStorage();
+			}
+
+			function editNote(index) {
+				const note = notes[index];
+				document.getElementById("editIndex").value = index;
+				document.getElementById("editText").value = note.text;
+				document.getElementById("editTimer").value = "";
+				document.getElementById("editColor").value = note.colorScheme || "secondary";
+				document.getElementById("editModalTitle").textContent = "Edit Note";
+				editModal.show();
+			}
+
+			function saveEdit() {
+				const index = parseInt(document.getElementById("editIndex").value);
+				const newText = document.getElementById("editText").value.trim();
+				const newTimer = document.getElementById("editTimer").value.trim();
+				const newColor = document.getElementById("editColor").value;
+
+				if (newText === "") return;
+
+				const note = notes[index];
+				note.text = newText;
+				note.colorScheme = newColor;
+
+				if (newTimer) {
+					const duration = parseTimer(newTimer);
+					if (duration > 0) {
+						note.originalDuration = duration;
+						note.endTime = Date.now() + duration;
+						note.paused = false;
+						note.pauseOffset = 0;
+					}
+				}
+
+				editModal.hide();
+				renderNotes();
+				saveToStorage();
+			}
+
+			function renderNotes() {
+				const notesList = document.getElementById("notesList");
+				notesList.innerHTML = notes
+					.map(
+						(note, index) => `
+					<div class="note-item card bg-${note.colorScheme || "secondary"} mb-2" draggable="true" data-index="${index}">
+						<div class="card-body d-flex align-items-center">
+							<i class="bi bi-grip-vertical drag-handle me-2"></i>
+							<div class="flex-grow-1">
+								<div>${note.text}</div>
+								<small class="text-light-emphasis timer-display" 
+									data-end="${note.endTime}"
+									data-paused="${note.paused}"
+									data-offset="${note.pauseOffset}">
+									${note.endTime ? formatTimeRemaining(note.endTime, note.paused, note.pauseOffset) : "No timer"}
+								</small>
+							</div>
+							${
+								note.endTime
+									? `
+								<button class="btn btn-sm btn-light me-1" onclick="togglePause(${index})">
+									<i class="bi bi-${note.paused ? "play" : "pause"}-fill"></i>
+								</button>
+								<button class="btn btn-sm btn-light me-1" onclick="restartTimer(${index})">
+									<i class="bi bi-arrow-clockwise"></i>
+								</button>
+							`
+									: ""
+							}
+							<button class="btn btn-sm btn-light me-1" onclick="editNote(${index})">
+								<i class="bi bi-pencil"></i>
+							</button>
+							<button class="btn btn-danger btn-sm" onclick="deleteNote(${index})">
+								<i class="bi bi-trash"></i>
+							</button>
+						</div>
+					</div>
+				`
+					)
+					.join("");
+
+				setupDragAndDrop();
+				updateTimers();
+			}
+
+			function updateTimers() {
+				Object.values(timerIntervals).forEach((interval) => clearInterval(interval));
+				timerIntervals = {};
+
+				document.querySelectorAll(".timer-display").forEach((display, index) => {
+					const endTime = parseInt(display.dataset.end);
+					if (!endTime) return;
+
+					const note = notes[index];
+					if (note.paused) {
+						display.textContent = formatTimeRemaining(endTime, true, note.pauseOffset);
+						return;
+					}
+
+					timerIntervals[display.dataset.end] = setInterval(() => {
+						if (notes[index].paused) {
+							clearInterval(timerIntervals[display.dataset.end]);
+							return;
+						}
+
+						display.textContent = formatTimeRemaining(endTime, false);
+						if (Date.now() >= endTime) {
+							clearInterval(timerIntervals[display.dataset.end]);
+							display.textContent = "Expired";
+						}
+					}, 1000);
+				});
+			}
+
+			function setupDragAndDrop() {
+				const notesList = document.getElementById("notesList");
+				const noteItems = document.querySelectorAll(".note-item");
+
+				noteItems.forEach((item) => {
+					item.addEventListener("dragstart", (e) => {
+						item.classList.add("dragging");
+						e.dataTransfer.setData("text/plain", item.dataset.index);
+						lastSwap = null;
+					});
+
+					item.addEventListener("dragend", () => {
+						item.classList.remove("dragging");
+						renderNotes();
+						saveToStorage();
+					});
+
+					item.addEventListener("dragover", (e) => {
+						e.preventDefault();
+						const dragging = document.querySelector(".dragging");
+						if (!dragging || dragging === item) return;
+
+						const dragIndex = parseInt(dragging.dataset.index);
+						const dropIndex = parseInt(item.dataset.index);
+
+						if (lastSwap === `${dragIndex}-${dropIndex}`) return;
+
+						const temp = notes[dragIndex];
+						notes[dragIndex] = notes[dropIndex];
+						notes[dropIndex] = temp;
+
+						dragging.dataset.index = dropIndex;
+						item.dataset.index = dragIndex;
+
+						lastSwap = `${dropIndex}-${dragIndex}`;
+
+						if (dropIndex < dragIndex) {
+							item.parentNode.insertBefore(dragging, item);
+						} else {
+							item.parentNode.insertBefore(dragging, item.nextSibling);
+						}
+					});
+				});
+			}
+
+			document.getElementById("noteInput").addEventListener("keypress", function (e) {
+				if (e.key === "Enter") {
+					addNote();
+				}
+			});
+
+			document.getElementById("timerInput").addEventListener("keypress", function (e) {
+				if (e.key === "Enter") {
+					addNote();
+				}
+			});
+		</script>
+	</body>
+</html>
